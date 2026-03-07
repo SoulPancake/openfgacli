@@ -1,0 +1,81 @@
+name: Docker Build & TLS Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-test:
+    name: Docker Build, Manifest & TLS Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.5.4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: './go.mod'
+          cache-dependency-path: './go.sum'
+          check-latest: true
+
+      - uses: anchore/sbom-action/download-syft@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+
+      - name: Run GoReleaser Snapshot
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --config .goreleaser.yaml --snapshot --skip sign,publish,announce
+
+      - name: Verify Docker images exist
+        run: |
+          echo "::group::Docker images"
+          docker images openfga/cli
+          echo "::endgroup::"
+
+          echo "Checking amd64 image..."
+          docker inspect openfga/cli:latest-amd64 > /dev/null
+          echo "✅ openfga/cli:latest-amd64 exists"
+
+          echo "Checking arm64 image..."
+          docker inspect openfga/cli:latest-arm64 > /dev/null
+          echo "✅ openfga/cli:latest-arm64 exists"
+
+      - name: Verify multi-arch manifest
+        run: |
+          echo "::group::Manifest details"
+          docker manifest inspect openfga/cli:latest
+          echo "::endgroup::"
+
+          ARCH_COUNT=$(docker manifest inspect openfga/cli:latest | jq '.manifests | length')
+          echo "Found $ARCH_COUNT architectures in manifest"
+          if [ "$ARCH_COUNT" -ne 2 ]; then
+            echo "❌ Expected 2 architectures (amd64, arm64), got $ARCH_COUNT"
+            exit 1
+          fi
+          echo "✅ Multi-arch manifest created successfully with $ARCH_COUNT architectures"
+
+      - name: Verify TLS works (CA certificates present)
+        run: |
+          echo "Testing CLI runs in container..."
+          docker run --rm openfga/cli:latest-amd64 version
+          echo "✅ fga version works"
+
+          # Test that HTTPS connections don't fail with x509 certificate errors.
+          # The command will fail (no real FGA server at this URL), but it should
+          # complete the TLS handshake without certificate errors.
+          echo "Testing TLS connectivity..."
+          OUTPUT=$(docker run --rm openfga/cli:latest-amd64 store list --api-url https://httpbin.org 2>&1 || true)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "x509"; then
+            echo "❌ TLS certificate error detected — CA certificates are missing"
+            exit 1
+          fi
+          echo "✅ No x509 certificate errors — CA certificates are working"
