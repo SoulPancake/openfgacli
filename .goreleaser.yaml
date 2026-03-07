@@ -42,7 +42,6 @@ dockers:
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--pull"
-      - "--provenance=false"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
@@ -65,26 +64,30 @@ dockers:
 
     build_flag_templates:
       - "--platform=linux/arm64"
-      - "--provenance=false"
 
 docker_manifests:
   - name_template: openfga/cli:latest
+    use: buildx
     image_templates:
       - openfga/cli:latest-amd64
       - openfga/cli:latest-arm64
   - name_template: openfga/cli:v{{ .Version }}
+    use: buildx
     image_templates:
       - openfga/cli:v{{ .Version }}-amd64
       - openfga/cli:v{{ .Version }}-arm64
   - name_template: openfga/cli:v{{ .Major }}
+    use: buildx
     image_templates:
       - openfga/cli:v{{ .Major }}-amd64
       - openfga/cli:v{{ .Major }}-arm64
   - name_template: openfga/cli:v{{ .Major }}.{{ .Minor }}
+    use: buildx
     image_templates:
       - openfga/cli:v{{ .Major }}.{{ .Minor }}-amd64
       - openfga/cli:v{{ .Major }}.{{ .Minor }}-arm64
   - name_template: openfga/cli:v{{ .Major }}.{{ .Minor }}.{{ .Patch }}
+    use: buildx
     image_templates:
       - openfga/cli:v{{ .Major }}.{{ .Minor }}.{{ .Patch }}-amd64
       - openfga/cli:v{{ .Major }}.{{ .Minor }}.{{ .Patch }}-arm64
