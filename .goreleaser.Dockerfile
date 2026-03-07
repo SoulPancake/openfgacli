@@ -1,3 +1,3 @@
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:latest
 COPY fga /fga
 ENTRYPOINT ["/fga"]
